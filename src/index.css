@@ -14,8 +14,9 @@
 }
 
 .font-english-title {
-  font-family: 'Cormorant Garamond', Georgia, serif !important;
-  font-weight: 700 !important;
+  font-family: 'Cinzel', 'Cormorant Garamond', Georgia, serif !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.06em !important;
 }
 
 @theme {
