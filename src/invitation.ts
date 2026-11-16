@@ -25,8 +25,8 @@ export const INVITATION = {
     googleMapsLink: "https://www.google.com/maps/search/?api=1&query=Green+Court+Hotel+Homagama",
   },
   rsvpContacts: [
-    "Resenu - 078 179 9321",
-    "Shashika - 070 602 3232",
+    "Shashika - 078 179 9321",
+    "Resenu - 070 602 3232",
   ],
 } as const;
 

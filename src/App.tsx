@@ -765,8 +765,8 @@ export default function WeddingInvitation() {
                 </p>
                 <div className="mb-9 flex flex-col items-center gap-1" style={{ fontFamily: `${lang === 'en' ? "'Cormorant Garamond'" : "'Abhaya Libre'"}, serif`, color: "#5A4A33", fontSize: "1.05rem" }}>
                   <div className="mb-1 text-[0.7rem] uppercase tracking-[0.3em]" style={{ fontFamily: "'Montserrat', sans-serif", color: "#B98A2F" }}>Contact</div>
-                  <a href="tel:+94781799321" className="hover:underline">Resenu - 078 179 9321</a>
-                  <a href="tel:+94706023232" className="hover:underline">Shashika - 070 602 3232</a>
+                  <a href="tel:+94781799321" className="hover:underline">Shashika - 078 179 9321</a>
+                  <a href="tel:+94706023232" className="hover:underline">Resenu - 070 602 3232</a>
                 </div>
                 
                 <form onSubmit={handleRsvpSubmit} className="rounded-[120px_120px_22px_22px] px-6 pb-10 pt-16 text-left sm:px-12 sm:pt-20" style={{ background: "#FCF8EE", border: "1px solid rgba(185, 138, 47, 0.4)", boxShadow: "0 30px 60px -40px rgba(120,86,30,0.45)" }}>
