@@ -1,154 +1,92 @@
 /**
- * Google Apps Script Web App for Wedding RSVP + Wishes
+ * Google Apps Script Web App — Wedding RSVP (Resenu & Shashika)
  *
  * Spreadsheet:
- * https://docs.google.com/spreadsheets/d/1DWeuLq0XoCdg0PFXg_uoCuHjW_WVnyam6z0V-zTWn9g/edit
+ * https://docs.google.com/spreadsheets/d/1RjTUzR50J1HSx5xorjQOqpYxYGXPNHiTUyrJ9EuTOG0/edit
  *
- * Required sheets:
- * - rsvp
- * - wish
+ * The "rsvp" sheet is created automatically on the first RSVP.
  */
 
-const SPREADSHEET_ID = "1s7CtSYuu0PeysjHKpaA7d8LQVb_d7xe87XkUu_KQ9lY";
+const SPREADSHEET_ID = "1RjTUzR50J1HSx5xorjQOqpYxYGXPNHiTUyrJ9EuTOG0";
 const RSVP_SHEET_NAME = "rsvp";
-const WISH_SHEET_NAME = "wish";
+const TIMEZONE = "Asia/Colombo";
+const RSVP_HEADERS = ["Timestamp", "Name", "Invited As", "Attendance", "Guests"];
 
 function doPost(e) {
-  return handleRequest_(e);
-}
-
-function doGet(e) {
-  return handleRequest_(e);
-}
-
-function handleRequest_(e) {
+  const lock = LockService.getScriptLock();
   try {
-    const params = parseParams_(e);
-    const action = String(params.action || "").trim().toLowerCase();
-
-    if (!action) {
-      return jsonResponse_({ ok: false, message: "Missing action" });
-    }
-
-    if (action === "rsvp") {
-      return jsonResponse_(saveRsvp_(params));
-    }
-
-    if (action === "wish") {
-      return jsonResponse_(saveWish_(params));
-    }
-
-    return jsonResponse_({ ok: false, message: "Invalid action" });
+    lock.waitLock(10000); // prevents two RSVPs writing to the same row at once
+    return jsonResponse_(saveRsvp_(parseParams_(e)));
   } catch (error) {
     return jsonResponse_({
       ok: false,
       message: error && error.message ? error.message : "Unexpected error",
     });
+  } finally {
+    try { lock.releaseLock(); } catch (ignored) {}
   }
 }
 
+// Open the web app URL in a browser to confirm the deployment works.
+function doGet() {
+  return jsonResponse_({ ok: true, message: "RSVP service is running" });
+}
+
 function saveRsvp_(params) {
-  const sheet = getSheet_(RSVP_SHEET_NAME);
+  const name = clean_(params.name, 120);
+  const invitedAs = clean_(params.invitedAs, 120);
+  const guestsRaw = clean_(params.guests, 3);
 
-  ensureHeader_(sheet, [
-    "timestamp",
-    "name",
-    "guests",
-    "attendance",
-    "dietaryNotes",
-  ]);
+  if (!name) return { ok: false, message: "Name is required" };
 
-  const name = String(params.name || "").trim();
-  const guests = String(params.guests || "").trim();
-  const dietaryNotes = String(params.dietaryNotes || "").trim();
+  const attending = guestsRaw !== "0";
+  const guests = attending ? Math.max(1, Math.min(50, parseInt(guestsRaw, 10) || 1)) : 0;
 
-  if (!name) {
-    return { ok: false, message: "Name is required" };
-  }
-
-  const attendance = guests === "0" ? "Declined" : "Attending";
-
-  sheet.appendRow([
-    new Date(),
+  getSheet_().appendRow([
+    Utilities.formatDate(new Date(), TIMEZONE, "yyyy-MM-dd HH:mm:ss"),
     name,
-    guests || "1",
-    attendance,
-    dietaryNotes,
+    invitedAs,
+    attending ? "Attending" : "Declined",
+    guests,
   ]);
 
   return { ok: true, message: "RSVP saved" };
 }
 
-function saveWish_(params) {
-  const sheet = getSheet_(WISH_SHEET_NAME);
-
-  ensureHeader_(sheet, ["timestamp", "name", "message"]);
-
-  const name = String(params.name || "").trim();
-  const message = String(params.message || "").trim();
-
-  if (!name || !message) {
-    return { ok: false, message: "Name and message are required" };
-  }
-
-  sheet.appendRow([new Date(), name, message]);
-
-  return { ok: true, message: "Wish saved" };
-}
-
-function getSheet_(sheetName) {
+function getSheet_() {
   const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
-  let sheet = spreadsheet.getSheetByName(sheetName);
+  let sheet = spreadsheet.getSheetByName(RSVP_SHEET_NAME);
+  if (!sheet) sheet = spreadsheet.insertSheet(RSVP_SHEET_NAME);
 
-  if (!sheet) {
-    sheet = spreadsheet.insertSheet(sheetName);
+  if (sheet.getLastRow() === 0) {
+    sheet.appendRow(RSVP_HEADERS);
+    sheet.getRange(1, 1, 1, RSVP_HEADERS.length).setFontWeight("bold").setBackground("#F5EDDC");
+    sheet.setFrozenRows(1);
   }
-
   return sheet;
 }
 
-function ensureHeader_(sheet, headers) {
-  if (sheet.getLastRow() === 0) {
-    sheet.appendRow(headers);
-  }
+/** Trims, limits length, and blocks spreadsheet formula injection (values starting with = + - @). */
+function clean_(value, maxLength) {
+  let text = String(value == null ? "" : value).trim().slice(0, maxLength);
+  if (/^[=+\-@]/.test(text)) text = "'" + text;
+  return text;
 }
 
 function parseParams_(e) {
   const params = Object.assign({}, (e && e.parameter) || {});
+  const contents = e && e.postData && e.postData.contents ? String(e.postData.contents).trim() : "";
+  if (!contents) return params;
+  if (contents.charAt(0) === "{") return Object.assign(params, JSON.parse(contents));
 
-  if (!(e && e.postData && e.postData.contents)) {
-    return params;
-  }
-
-  const contents = String(e.postData.contents || "").trim();
-  if (!contents) {
-    return params;
-  }
-
-  if (contents.charAt(0) === "{") {
-    const json = JSON.parse(contents);
-    return Object.assign(params, json);
-  }
-
-  const parsed = parseFormEncoded_(contents);
-  return Object.assign(params, parsed);
-}
-
-function parseFormEncoded_(raw) {
-  const result = {};
-  const pairs = String(raw || "").split("&");
-
-  for (var i = 0; i < pairs.length; i++) {
-    if (!pairs[i]) continue;
-    var parts = pairs[i].split("=");
-    var key = decodeURIComponent((parts[0] || "").replace(/\+/g, " "));
-    var value = decodeURIComponent((parts.slice(1).join("=") || "").replace(/\+/g, " "));
-    if (key) {
-      result[key] = value;
-    }
-  }
-
-  return result;
+  contents.split("&").forEach(function (pair) {
+    if (!pair) return;
+    const parts = pair.split("=");
+    const key = decodeURIComponent((parts[0] || "").replace(/\+/g, " "));
+    const value = decodeURIComponent((parts.slice(1).join("=") || "").replace(/\+/g, " "));
+    if (key) params[key] = value;
+  });
+  return params;
 }
 
 function jsonResponse_(data) {

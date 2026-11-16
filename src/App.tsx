@@ -2,39 +2,10 @@ import React, { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Sparkles, MapPin, Calendar, Clock, ChevronDown } from "lucide-react";
 
-const INVITATION = {
-  couple: {
-    bride: "රෙසේනු",
-    groom: "ශෂික",
-    brideFull: "රෙසේනු",
-    groomFull: "ශෂික",
-  },
-  date: {
-    displayNumeric: "25 . 01 . 2027",
-    displayLong: "2027 ජනවාරි මස 25 වන දින",
-    countdownTarget: "2027-01-25T10:00:00+05:30",
-  },
-  time: {
-    ceremonyStart: "පෙ.ව. 10:30",
-    ceremonyEnd: "ප.ව. 4:00",
-    registration: "පෙ.ව. 10:00",
-    welcome: "උදෑසන 8:00",
-  },
-  venue: {
-    name: "Green Court Hotel",
-    city: "Homagama",
-    mapQuery: "Green Court Hotel, Homagama",
-    googleMapsLink: "https://www.google.com/maps/search/?api=1&query=Green+Court+Hotel+Homagama",
-  },
-  rsvpContacts: [
-    "Resenu - 078 179 9321",
-    "Shashika - 070 602 3232",
-  ],
-} as const;
+import { INVITATION, RSVP_SCRIPT_URL, readGuestNameFromUrl } from "./invitation";
 
 const backgroundMusic = "/ssstik.io_1790155724397.mp3";
-const googleScriptUrl =
-  "https://script.google.com/macros/s/AKfycbwxIzEgbWhN1mIGbFiI4YIKGqa4S5dylwrDaNkoMZVkUzEmhES9QVqDm2YIgXo3sepF/exec";
+const googleScriptUrl = RSVP_SCRIPT_URL;
 
 const publicImagePath = (fileName: string) => `/images/${fileName.replaceAll(" ", "%20")}`;
 const preImagePath = (fileName: string) => `/pre/${fileName.replaceAll(" ", "%20")}`;
@@ -268,11 +239,10 @@ export default function WeddingInvitation() {
   const [hasAttemptedAutoplay, setHasAttemptedAutoplay] = useState(false);
   const [isPlayingIntroVideo, setIsPlayingIntroVideo] = useState(false);
 
-  const searchParams = new URLSearchParams(window.location.search);
-  const guestName = searchParams.get("to");
+  const [guestName] = useState(readGuestNameFromUrl);
 
   const [rsvpForm, setRsvpForm] = useState({
-    name: "",
+    name: guestName ?? "",
     guests: "1",
   });
 
@@ -282,8 +252,8 @@ export default function WeddingInvitation() {
   const introVideoRef = React.useRef<HTMLVideoElement>(null);
 
   const submitToGoogleSheet = async (payload: Record<string, string>) => {
-    if (!googleScriptUrl) {
-      throw new Error("Google Script URL tl ilid ke;");
+    if (!googleScriptUrl.startsWith("https://script.google.com/")) {
+      throw new Error("RSVP script URL is not configured");
     }
 
     const response = await fetch(googleScriptUrl, {
@@ -292,7 +262,13 @@ export default function WeddingInvitation() {
     });
 
     if (!response.ok) {
-      throw new Error("b,a,Su id¾:l fkdùh");
+      throw new Error("RSVP request failed");
+    }
+
+    const result = await response.json().catch(() => null);
+
+    if (!result?.ok) {
+      throw new Error(result?.message || "RSVP was not saved");
     }
   };
 
@@ -310,12 +286,13 @@ export default function WeddingInvitation() {
       await submitToGoogleSheet({
         action: "rsvp",
         name: rsvpForm.name.trim(),
+        invitedAs: guestName ?? "",
         guests: rsvpForm.guests,
         dietaryNotes: "",
       });
 
       setRsvpStatus("success");
-      setRsvpForm({ name: "", guests: "1" });
+      setRsvpForm({ name: guestName ?? "", guests: "1" });
     } catch {
       setRsvpStatus("error");
     }
@@ -480,7 +457,12 @@ export default function WeddingInvitation() {
                     <div aria-hidden="true" style={{ width: "min(56vw,260px)", height: "min(20vw,94px)", background: "linear-gradient(180deg, #D8B45F 0%, #B98A2F 55%, #8C6420 100%)", WebkitMaskImage: "url('/image-removebg-preview (4).png')", maskImage: "url('/image-removebg-preview (4).png')", WebkitMaskRepeat: "no-repeat", maskRepeat: "no-repeat", WebkitMaskSize: "contain", maskSize: "contain", WebkitMaskPosition: "center", maskPosition: "center" }}></div>
                   </div>
                   
-                  <p className="mt-7" aria-label="සාදර ඇරයුමයි !">
+                  {guestName && (
+                    <p className="mt-7 mb-0 max-w-[30ch] text-center" style={{ fontFamily: "'Cormorant Garamond', 'Noto Sans Sinhala', Georgia, serif", fontWeight: 700, color: "#8C6420", fontSize: "clamp(1.35rem,5.2vw,1.9rem)", lineHeight: 1.25 }}>
+                      {guestName}
+                    </p>
+                  )}
+                  <p className={guestName ? "mt-3" : "mt-7"} aria-label="සාදර ඇරයුමයි !">
                     <span aria-hidden="true" className={lang === "si" ? "font-nimsara" : "font-english-title tracking-wide"} style={{ fontVariantLigatures: "none", color: "#8C6420", fontSize: "clamp(1.7rem,7vw,2.8rem)", lineHeight: 1.2 }}>{lang === 'si' ? 'idor werhquhs' : 'You\'re Invited'}</span>
                     <span aria-hidden="true" style={{ fontFamily: `'Noto Sans Sinhala', ${lang === 'en' ? "'Cormorant Garamond'" : "'Abhaya Libre'"}, serif`, fontWeight: 700, color: "#8C6420", fontSize: "clamp(1.7rem,7vw,2.8rem)", lineHeight: 1.2 }}>{lang === 'si' ? ' !' : '!'}</span>
                   </p>
@@ -555,15 +537,20 @@ export default function WeddingInvitation() {
                     <span aria-hidden="true" style={{ fontFamily: "'Noto Sans Sinhala', sans-serif", fontWeight: 600 }}> !</span>
                   </h1>
                 </div>
+                {guestName && (
+                  <p className="mt-5 mx-auto max-w-[34ch] text-center leading-[1.7]" style={{ fontFamily: "'Cormorant Garamond', 'Noto Sans Sinhala', Georgia, serif", color: "#5A4A33", fontSize: "clamp(1.02rem,3.6vw,1.2rem)" }}>
+                    {lang === 'si' ? <>අපගේ විශේෂ දිනය සමරන්නට <span style={{ fontWeight: 700, color: "#8C6420" }}>{guestName}</span> ඔබට සාදරයෙන් ආරාධනා කරමු.</> : <>We cordially invite <span style={{ fontWeight: 700, color: "#8C6420" }}>{guestName}</span> to celebrate our special day with us.</>}
+                  </p>
+                )}
                 
                 <div className="mt-7 grid grid-cols-2 gap-5 sm:gap-10">
                   <div className="flex flex-col items-center gap-3">
                     <p className="text-[0.95rem] leading-[1.8] sm:text-base text-[#5A4A33] whitespace-pre-line text-center" style={{ fontFamily: "'Noto Sans Sinhala', sans-serif" }}>
-                      {lang === 'si' ? `ජී. එස්. අනුර මහතාගේ
+                      {lang === 'si' ? `පී. එස්. අනුර මහතාගේ
                       සහ එම මහත්මියගේ
                       ආදරණීය දියණිය` : `Loving daughter of
                       Mr. & Mrs.
-                      G. S. Anura`}
+                      P. S. Anura`}
                     </p>
                     <p className="mt-auto" aria-label="රෙසේනු">
                       <span aria-hidden="true" className={lang === "si" ? "font-nimsara whitespace-nowrap" : "font-english-title tracking-wide whitespace-nowrap"} style={{ fontVariantLigatures: "none", color: "#8C6420", fontSize: "clamp(1.4rem,4.2vw,2rem)", lineHeight: 1.15 }}>
@@ -573,11 +560,11 @@ export default function WeddingInvitation() {
                   </div>
                   <div className="flex flex-col items-center gap-3">
                     <p className="text-[0.95rem] leading-[1.8] sm:text-base text-[#5A4A33] whitespace-pre-line text-center" style={{ fontFamily: "'Noto Sans Sinhala', sans-serif" }}>
-                      {lang === 'si' ? `ස්ටැන්ලි පෙරේරා මහතාගේ
+                      {lang === 'si' ? `එස්. පෙරේරා මහතාගේ
                       සහ එම මහත්මියගේ
                       ආදරණීය පුත්‍රයාණන්` : `Loving son of
                       Mr. & Mrs.
-                      Stanley Perera`}
+                      S. Perera`}
                     </p>
                     <p className="mt-auto" aria-label="ශෂික">
                       <span aria-hidden="true" className={lang === "si" ? "font-nimsara block text-center" : "font-english-title tracking-wide block text-center"} style={{ fontVariantLigatures: "none", color: "#8C6420", fontSize: "clamp(1.4rem,4.2vw,2rem)", lineHeight: 1.15 }}>
@@ -590,7 +577,7 @@ export default function WeddingInvitation() {
                 <div className="relative mx-auto mt-7 w-[min(84%,440px)]">
                   <div aria-hidden="true" className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2" style={{ width: "150%", height: "128%", zIndex: 0, background: "radial-gradient(60% 58% at 50% 46%, rgba(252, 248, 238, 0.96) 0%, rgba(252, 248, 238, 0.85) 38%, rgba(252, 248, 238, 0.5) 62%, rgba(252, 248, 238, 0) 82%)" }}></div>
                   <div aria-hidden="true" className="pointer-events-none absolute bottom-[8%] left-1/2 -translate-x-1/2" style={{ width: "62%", height: "9%", zIndex: 1, borderRadius: "50%", background: "radial-gradient(50% 50% at 50% 50%, rgba(140, 100, 32, 0.22) 0%, rgba(140, 100, 32, 0) 70%)", filter: "blur(4px)" }}></div>
-                  <img src="/couple.png" alt="රෙසේනු සහ ශෂික" loading="eager" draggable="false" className="relative z-[2] w-full select-none rounded-[2rem] object-cover" />
+                  <img src="/Elegant%20South%20Asian%20Wedding%20Couple.png" alt="රෙසේනු සහ ශෂික" loading="eager" draggable="false" className="relative z-[2] w-full select-none rounded-[2rem] object-cover" />
                 </div>
                 
                 <p className="mx-auto mt-6 max-w-[36ch] text-[1.02rem] leading-[1.9] text-[#5A4A33]" style={{ fontFamily: "'Noto Sans Sinhala', sans-serif" }}>
@@ -616,7 +603,7 @@ export default function WeddingInvitation() {
                     {lang === 'si' ? 'පෙරවරු 10.00 සිට පස්වරු 4.00 දක්වා' : 'From 10:00 AM to 4:00 PM'}
                   </div>
                   <p className="mt-1 text-[0.92rem]" style={{ fontFamily: `'Noto Sans Sinhala', ${lang === 'en' ? "'Cormorant Garamond'" : "'Abhaya Libre'"}, serif`, color: "#8A7A60" }}>
-                    {lang === 'si' ? `(පෝරුවේ චාරිත්‍ර ${INVITATION.time.ceremonyStart} ට)` : `(Poruwa Ceremony at 10.30am)`}
+                    {lang === 'si' ? `(පෝරුවේ චාරිත්‍ර ${INVITATION.time.ceremonyStart} ට)` : `(Poruwa Ceremony at 10.01am)`}
                   </p>
                 </div>
                 
@@ -686,7 +673,7 @@ export default function WeddingInvitation() {
                   </div>
                   <span className="my-1.5 h-px w-10" style={{ background: "#D8B45F" }} aria-hidden="true"></span>
                   <p className="text-[0.95rem] leading-[1.8]" style={{ fontFamily: `'Noto Sans Sinhala', ${lang === 'en' ? "'Cormorant Garamond'" : "'Abhaya Libre'"}, serif`, color: "#8A7A60" }}>
-                    {lang === 'si' ? 'පෝරුවේ චාරිත්‍රය:' : 'Poruwa Ceremony:'} {lang === 'si' ? INVITATION.time.ceremonyStart : '10.30am'} {lang === 'si' ? 'ට' : ''}<br/>{lang === 'si' ? 'උත්සවය:' : 'Celebration:'} {lang === 'si' ? `${INVITATION.time.registration} සිට ${INVITATION.time.ceremonyEnd} දක්වා` : '10.00am – 4.00pm'}
+                    {lang === 'si' ? 'පෝරුවේ චාරිත්‍රය:' : 'Poruwa Ceremony:'} {lang === 'si' ? INVITATION.time.ceremonyStart : '10.01am'} {lang === 'si' ? 'ට' : ''}<br/>{lang === 'si' ? 'උත්සවය:' : 'Celebration:'} {lang === 'si' ? `${INVITATION.time.registration} සිට ${INVITATION.time.ceremonyEnd} දක්වා` : '10.00am – 4.00pm'}
                   </p>
                 </div>
               </div>
@@ -773,9 +760,14 @@ export default function WeddingInvitation() {
                 <p className="mx-auto mb-2 mt-5 max-w-[44ch] leading-[1.85]" style={{ fontFamily: `'Noto Sans Sinhala', ${lang === 'en' ? "'Cormorant Garamond'" : "'Abhaya Libre'"}, serif`, color: "#8A7A60" }}>
                   {lang === 'si' ? 'ඔබගේ පැමිණීම අපට මහත් සතුටකි. කරුණාකර කලින් දන්වන්න.' : 'Your presence is our greatest joy. Please let us know in advance.'}
                 </p>
-                <p className="mb-9 text-[0.95rem]" style={{ fontFamily: `'Noto Sans Sinhala', ${lang === 'en' ? "'Cormorant Garamond'" : "'Abhaya Libre'"}, serif`, fontWeight: 600, color: "#8C6420" }}>
+                <p className="mb-5 text-[0.95rem]" style={{ fontFamily: `'Noto Sans Sinhala', ${lang === 'en' ? "'Cormorant Garamond'" : "'Abhaya Libre'"}, serif`, fontWeight: 600, color: "#8C6420" }}>
                   {lang === 'si' ? 'ඔබගේ පැමිණීම 2027 ජනවාරි 10 දිනට පෙර කරුණාකර දන්වන්න' : 'Please RSVP before January 10, 2027'}
                 </p>
+                <div className="mb-9 flex flex-col items-center gap-1" style={{ fontFamily: `${lang === 'en' ? "'Cormorant Garamond'" : "'Abhaya Libre'"}, serif`, color: "#5A4A33", fontSize: "1.05rem" }}>
+                  <div className="mb-1 text-[0.7rem] uppercase tracking-[0.3em]" style={{ fontFamily: "'Montserrat', sans-serif", color: "#B98A2F" }}>Contact</div>
+                  <a href="tel:+94781799321" className="hover:underline">Resenu - 078 179 9321</a>
+                  <a href="tel:+94706023232" className="hover:underline">Shashika - 070 602 3232</a>
+                </div>
                 
                 <form onSubmit={handleRsvpSubmit} className="rounded-[120px_120px_22px_22px] px-6 pb-10 pt-16 text-left sm:px-12 sm:pt-20" style={{ background: "#FCF8EE", border: "1px solid rgba(185, 138, 47, 0.4)", boxShadow: "0 30px 60px -40px rgba(120,86,30,0.45)" }}>
                   <div className="mb-5 flex flex-col gap-1.5">
@@ -902,12 +894,6 @@ export default function WeddingInvitation() {
                   </div>
                   <div className="mb-6 text-[1.05rem] leading-[1.85]" style={{ fontFamily: `'Noto Sans Sinhala', ${lang === 'en' ? "'Cormorant Garamond'" : "'Abhaya Libre'"}, serif`, color: "#EDDFB8" }}>
                     {lang === 'si' ? 'ආදරයෙන්, දෙපවුලේ ආරාධනයයි' : 'With love, from both families'}
-                  </div>
-                  
-                  <div className="mb-8 flex flex-col items-center gap-1 text-[1rem]" style={{ fontFamily: `${lang === 'en' ? "'Cormorant Garamond'" : "'Abhaya Libre'"}, serif`, color: "#EDDFB8" }}>
-                    <div className="font-bold uppercase tracking-widest text-[0.75rem] mb-1" style={{ fontFamily: "'Montserrat', sans-serif", opacity: 0.85 }}>Contact</div>
-                    <div>Resenu - 078 179 9321</div>
-                    <div>Shashika - 070 602 3232</div>
                   </div>
 
                   <div className="relative mx-auto mb-7" style={{ width: "150px", height: "54px" }}>
